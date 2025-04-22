@@ -1,0 +1,3 @@
+Howdy hey!
+
+Trying my hand at a discord bot to use for me and my friends in our discord server. Right now I am learning the Discord Bot Library from https://discordpy.readthedocs.io/en/stable/index.html and starting off programming out the basic commands that every bot has, but eventually want to do fun things with the bot such as a built-in trivia game and an emulation of the Mudae pokemon roll bot!
