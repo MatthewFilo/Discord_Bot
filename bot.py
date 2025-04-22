@@ -1,11 +1,16 @@
 import discord
 from discord.ext import commands
+from discord.ext import tasks
 import os
 from dotenv import load_dotenv
 import asyncio
 import random
 import requests
 import html  # To decode HTML entities in the API response
+import openmeteo_requests
+import requests_cache
+import pandas as pd
+from retry_requests import retry
 
 # Setting up environment
 load_dotenv()
@@ -16,7 +21,14 @@ channel_id = os.getenv('Channel_ID')
 
 # Set the default character for intents
 bot = commands.Bot(command_prefix='!', intents=intents)
-bot.remove_command("help") # Remove the default help ocmmand
+bot.remove_command("help") # Remove the default help command
+
+# Set up the Open Meteo API client with caching and retry
+cache_session = requests_cache.CachedSession('.cache', expire_after = 3600)
+retry_session = retry(cache_session, retries = 5, backoff_factor = 0.2)
+openmeteo = openmeteo_requests.Client(session = retry_session)
+WIND_SPEED_THRESHOLD = 30 # emergency wind speed threshold
+url = "https://api.open-meteo.com/v1/forecast"
 
 @bot.command(name='help') # Create new help command to override the default one
 async def help_command(ctx):
@@ -25,6 +37,8 @@ async def help_command(ctx):
         "`!remindme <time_in_seconds> <reminder>` - Set a reminder.\n"
         "`!roll [sides]` - Roll a die with the specified number of sides (default is 100).\n"
         "`!trivia` - Get a trivia question and answer it.\n"
+        "`!FWweather` - Get the weather forecast for Fort Worth.\n"
+        "`!SDweather` - Get the weather forecast for San Diego.\n"
     )
     await ctx.send(help_text)
 
@@ -102,8 +116,96 @@ async def trivia(ctx):
     else:
         await ctx.send("⚠️ Failed to fetch trivia questions. Please try again later.")
 
+@bot.command(name='FWweather') # Alerts the user of the weather in Fort Worth
+async def FWweather(ctx):
+    params = {
+        "latitude": 32.7254,
+        "longitude": -97.3208,
+        "hourly": ["temperature_2m", "precipitation_probability", "wind_gusts_10m"],
+        "forecast_days": 1,
+        "temperature_unit": "fahrenheit",
+        "precipitation_unit": "inch",
+        "wind_speed_unit": "mph"
+    }
+    response = openmeteo.weather_api(url, params=params)[0]
+    hourly = response.Hourly()
+    
+    data = {
+        "Time": pd.date_range(
+            start=pd.to_datetime(hourly.Time(), unit="s", utc=True),
+            end=pd.to_datetime(hourly.TimeEnd(), unit="s", utc=True),
+            freq=pd.Timedelta(seconds=hourly.Interval()),
+            inclusive="left"
+        ),
+        "Temp (°F)": hourly.Variables(0).ValuesAsNumpy(),
+        "Precip (%)": hourly.Variables(1).ValuesAsNumpy(),
+        "Wind Gusts (mph)": hourly.Variables(2).ValuesAsNumpy()
+    }
+    
+    df = pd.DataFrame(data).head(5)  # Show only the first 5 rows
+    
+    # Format the DataFrame for Discord message
+    formatted_data = "```\n" + df.to_string(index=False, justify="center") + "\n```"
+    await ctx.send(f"**Weather Alert:**\n{formatted_data}")
+
+@tasks.loop(minutes=30) # Check every 30 minutes
+async def check_wind_speed():
+    params = {
+        "latitude": 32.7254,
+        "longitude": -97.3208,
+        "hourly": ["temperature_2m", "precipitation_probability", "wind_gusts_10m"],
+        "forecast_days": 1,
+        "temperature_unit": "fahrenheit",
+        "precipitation_unit": "inch",
+        "wind_speed_unit": "mph"
+    }
+    response = openmeteo.weather_api(url, params=params)[0]
+    hourly = response.Hourly()
+    
+    wind_gusts = hourly.Variables(2).ValuesAsNumpy()
+    
+    if wind_gusts[0] > WIND_SPEED_THRESHOLD:
+        channel = bot.get_channel(int(channel_id))
+        await channel.send(f"⚠️ Wind gusts are over {WIND_SPEED_THRESHOLD} mph! Stay safe!")
+@check_wind_speed.before_loop
+async def before_check_wind_speed():
+    await bot.wait_until_ready()
+
+@bot.command(name='SDweather') # Alerts the user of the weather in San Diego
+async def SDweather(ctx):
+    params = {
+        "latitude": 32.7157,
+        "longitude": -117.1647,
+        "hourly": ["temperature_2m", "precipitation_probability", "rain"],
+        "forecast_days": 1,
+        "temperature_unit": "fahrenheit",
+        "precipitation_unit": "inch",
+        "wind_speed_unit": "mph"
+    }
+    response = openmeteo.weather_api(url, params=params)[0]
+    hourly = response.Hourly()
+    
+    data = {
+        "Time": pd.date_range(
+            start=pd.to_datetime(hourly.Time(), unit="s", utc=True),
+            end=pd.to_datetime(hourly.TimeEnd(), unit="s", utc=True),
+            freq=pd.Timedelta(seconds=hourly.Interval()),
+            inclusive="left"
+        ),
+        "Temp (°F)": hourly.Variables(0).ValuesAsNumpy(),
+        "Precip (%)": hourly.Variables(1).ValuesAsNumpy(),
+        "Rain (in)": hourly.Variables(2).ValuesAsNumpy()
+    }
+    
+    df = pd.DataFrame(data).head(5)  # Show only the first 5 rows
+    
+    # Format the DataFrame for Discord message
+    formatted_data = "```\n" + df.to_string(index=False, justify="center") + "\n```"
+    await ctx.send(f"**San Diego Weather Alert:**\n{formatted_data}")
+
 @bot.event # Error handling for the bot
 async def on_error(event, *args, **kwargs):
     print(f'An error occurred in {event}:', args, kwargs)
 
 bot.run(TOKEN)
+check_wind_speed.start() # Start the wind speed check loop
