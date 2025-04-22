@@ -167,7 +167,8 @@ async def check_wind_speed():
     if wind_gusts[0] > WIND_SPEED_THRESHOLD:
         channel = bot.get_channel(int(channel_id))
         await channel.send(f"⚠️ Wind gusts are over {WIND_SPEED_THRESHOLD} mph! Stay safe!")
-@check_wind_speed.before_loop
+
+@check_wind_speed.before_loop # Wait until the bot is ready before beginning this loop
 async def before_check_wind_speed():
     await bot.wait_until_ready()
 
