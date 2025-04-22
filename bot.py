@@ -7,9 +7,8 @@ import random
 import requests
 import html  # To decode HTML entities in the API response
 
-
+# Setting up environment
 load_dotenv()
-
 TOKEN = os.getenv('Token')
 intents = discord.Intents.default()
 intents.message_content = True
@@ -19,7 +18,7 @@ channel_id = os.getenv('Channel_ID')
 bot = commands.Bot(command_prefix='!', intents=intents)
 bot.remove_command("help") # Remove the default help ocmmand
 
-@bot.command(name='help')
+@bot.command(name='help') # Create new help command to override the default one
 async def help_command(ctx):
     help_text = (
         "Here are the commands you can use:\n"
@@ -31,14 +30,13 @@ async def help_command(ctx):
 
 
 @bot.event
-async def on_ready():
+async def on_ready(): # Displays in terminal when bot is ready
     print(f'{bot.user} has connected to Discord!')
 
-@bot.event
+@bot.event # Whenever bot is mentioned, respond
 async def on_message(message):
-    channel= bot.get_channel(channel_id)
     if bot.user in message.mentions:
-        await message.channel.send("Howdy")
+        await message.channel.send("Howdy!")
     await bot.process_commands(message)
 
 @bot.command(name='remindme')
@@ -48,19 +46,19 @@ async def remindme(ctx, time: int, *, reminder: str):
     await asyncio.sleep(time) # Sleep for specified time
     await ctx.send(f"Time is up: {reminder}") # Timer over, send reminder
 
-@remindme.error
+@remindme.error # Error handling function for remindme command
 async def remindme_error(ctx, error):
     if isinstance(error, commands.MissingRequiredArgument):
         await ctx.send("Usage: `!remindme <time_in_seconds> <reminder>`\nExample: `!remindme 60 Take a break!`")
     elif isinstance(error, commands.BadArgument):
         await ctx.send("Invalid argument. Arguments must be !remindme <time_in_seconds> <reminder>.\nExample: `!remindme 60 Take a break!`")
 
-@bot.command(name='roll')
+@bot.command(name='roll') # Roll command to roll 1-100
 async def roll(ctx, sides: int = 100):
     result = random.randint(1, sides)
     await ctx.send(f'You rolled a {result}!')
 
-@bot.command(name='trivia')
+@bot.command(name='trivia') # Trivia command using the Open Trivia Database API
 async def trivia(ctx):
     # Fetch trivia questions from the API
     url = os.getenv("api_link")
@@ -98,13 +96,13 @@ async def trivia(ctx):
                 else:
                     await ctx.author.send(f"❌ Wrong! The correct answer was **{correct_answer}**.")
             except asyncio.TimeoutError:
-                await ctx.send("⏰ Time's up! You didn't answer in time.")
+                await ctx.author.send("⏰ Time's up! You didn't answer in time.")
         else:
             await ctx.send("⚠️ No trivia questions available at the moment. Try again later.")
     else:
         await ctx.send("⚠️ Failed to fetch trivia questions. Please try again later.")
 
-@bot.event
+@bot.event # Error handling for the bot
 async def on_error(event, *args, **kwargs):
     print(f'An error occurred in {event}:', args, kwargs)
 
