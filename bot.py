@@ -146,7 +146,7 @@ async def FWweather(ctx):
     
     # Format the DataFrame for Discord message
     formatted_data = "```\n" + df.to_string(index=False, justify="center") + "\n```"
-    await ctx.send(f"**Weather Alert:**\n{formatted_data}")
+    await ctx.send(f"**Fort Worth Weather:**\n{formatted_data}")
 
 @tasks.loop(minutes=30) # Check every 30 minutes
 async def check_wind_speed():
@@ -201,7 +201,7 @@ async def SDweather(ctx):
     
     # Format the DataFrame for Discord message
     formatted_data = "```\n" + df.to_string(index=False, justify="center") + "\n```"
-    await ctx.send(f"**San Diego Weather Alert:**\n{formatted_data}")
+    await ctx.send(f"**San Diego Weather:**\n{formatted_data}")
 
 @bot.event # Error handling for the bot
 async def on_error(event, *args, **kwargs):
